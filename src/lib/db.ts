@@ -11,6 +11,13 @@ import {
   TemplateId,
 } from "@/types/resume";
 
+if (
+  process.env.VERCEL &&
+  (!process.env.DATABASE_URL || process.env.DATABASE_URL.startsWith("file:./"))
+) {
+  process.env.DATABASE_URL = "file:/tmp/dev.db";
+}
+
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
@@ -288,10 +295,70 @@ export function masterToResumeDocument(
 
 let seedPromise: Promise<void> | null = null;
 
-async function ensureDatabaseSeeded(): Promise<void> {
+export async function ensureDatabaseSeeded(): Promise<void> {
   if (!seedPromise) {
     seedPromise = (async () => {
       try {
+        await prisma.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS "MasterProfile" (
+            "id" TEXT NOT NULL PRIMARY KEY DEFAULT 'default',
+            "personalInfo" TEXT NOT NULL,
+            "experiences" TEXT NOT NULL,
+            "education" TEXT NOT NULL,
+            "certifications" TEXT NOT NULL,
+            "projects" TEXT NOT NULL,
+            "skills" TEXT NOT NULL,
+            "publications" TEXT NOT NULL,
+            "awards" TEXT NOT NULL,
+            "volunteer" TEXT NOT NULL,
+            "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+          );
+        `);
+        await prisma.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS "TailoredResume" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "title" TEXT NOT NULL,
+            "collection" TEXT NOT NULL DEFAULT 'General',
+            "targetRole" TEXT NOT NULL DEFAULT '',
+            "targetCompany" TEXT NOT NULL DEFAULT '',
+            "jobUrl" TEXT NOT NULL DEFAULT '',
+            "jobDescription" TEXT NOT NULL DEFAULT '',
+            "templateId" TEXT NOT NULL DEFAULT 'harvard',
+            "fontFamily" TEXT NOT NULL DEFAULT 'Calibri',
+            "fontSize" TEXT NOT NULL DEFAULT 'medium',
+            "pageLimit" INTEGER NOT NULL DEFAULT 1,
+            "cvData" TEXT NOT NULL,
+            "atsAnalysis" TEXT NOT NULL DEFAULT '{}',
+            "coverLetter" TEXT NOT NULL DEFAULT '',
+            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+          );
+        `);
+        await prisma.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS "JobApplication" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "companyName" TEXT NOT NULL,
+            "roleTitle" TEXT NOT NULL,
+            "jobUrl" TEXT NOT NULL DEFAULT '',
+            "location" TEXT NOT NULL DEFAULT '',
+            "status" TEXT NOT NULL DEFAULT 'APPLIED',
+            "appliedDate" TEXT NOT NULL DEFAULT '',
+            "salaryRange" TEXT NOT NULL DEFAULT '',
+            "notes" TEXT NOT NULL DEFAULT '',
+            "tailoredResumeId" TEXT,
+            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT "JobApplication_tailoredResumeId_fkey" FOREIGN KEY ("tailoredResumeId") REFERENCES "TailoredResume" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+          );
+        `);
+        await prisma.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS "AppSetting" (
+            "key" TEXT NOT NULL PRIMARY KEY,
+            "value" TEXT NOT NULL,
+            "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+          );
+        `);
+
         await prisma.masterProfile.upsert({
           where: { id: "default" },
           update: {},
@@ -727,6 +794,7 @@ export async function getStoredApiKey(): Promise<string> {
   if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== "") {
     return process.env.GEMINI_API_KEY.trim();
   }
+  await ensureDatabaseSeeded();
   const row = await prisma.appSetting.findUnique({
     where: { key: "GEMINI_API_KEY" },
   });
@@ -734,6 +802,7 @@ export async function getStoredApiKey(): Promise<string> {
 }
 
 export async function setStoredApiKey(apiKey: string): Promise<void> {
+  await ensureDatabaseSeeded();
   await prisma.appSetting.upsert({
     where: { key: "GEMINI_API_KEY" },
     create: { key: "GEMINI_API_KEY", value: apiKey.trim() },

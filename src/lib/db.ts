@@ -11,13 +11,6 @@ import {
   TemplateId,
 } from "@/types/resume";
 
-if (
-  process.env.VERCEL &&
-  (!process.env.DATABASE_URL || process.env.DATABASE_URL.startsWith("file:./"))
-) {
-  process.env.DATABASE_URL = "file:/tmp/dev.db";
-}
-
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
@@ -299,66 +292,6 @@ export async function ensureDatabaseSeeded(): Promise<void> {
   if (!seedPromise) {
     seedPromise = (async () => {
       try {
-        await prisma.$executeRawUnsafe(`
-          CREATE TABLE IF NOT EXISTS "MasterProfile" (
-            "id" TEXT NOT NULL PRIMARY KEY DEFAULT 'default',
-            "personalInfo" TEXT NOT NULL,
-            "experiences" TEXT NOT NULL,
-            "education" TEXT NOT NULL,
-            "certifications" TEXT NOT NULL,
-            "projects" TEXT NOT NULL,
-            "skills" TEXT NOT NULL,
-            "publications" TEXT NOT NULL,
-            "awards" TEXT NOT NULL,
-            "volunteer" TEXT NOT NULL,
-            "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-          );
-        `);
-        await prisma.$executeRawUnsafe(`
-          CREATE TABLE IF NOT EXISTS "TailoredResume" (
-            "id" TEXT NOT NULL PRIMARY KEY,
-            "title" TEXT NOT NULL,
-            "collection" TEXT NOT NULL DEFAULT 'General',
-            "targetRole" TEXT NOT NULL DEFAULT '',
-            "targetCompany" TEXT NOT NULL DEFAULT '',
-            "jobUrl" TEXT NOT NULL DEFAULT '',
-            "jobDescription" TEXT NOT NULL DEFAULT '',
-            "templateId" TEXT NOT NULL DEFAULT 'harvard',
-            "fontFamily" TEXT NOT NULL DEFAULT 'Calibri',
-            "fontSize" TEXT NOT NULL DEFAULT 'medium',
-            "pageLimit" INTEGER NOT NULL DEFAULT 1,
-            "cvData" TEXT NOT NULL,
-            "atsAnalysis" TEXT NOT NULL DEFAULT '{}',
-            "coverLetter" TEXT NOT NULL DEFAULT '',
-            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-          );
-        `);
-        await prisma.$executeRawUnsafe(`
-          CREATE TABLE IF NOT EXISTS "JobApplication" (
-            "id" TEXT NOT NULL PRIMARY KEY,
-            "companyName" TEXT NOT NULL,
-            "roleTitle" TEXT NOT NULL,
-            "jobUrl" TEXT NOT NULL DEFAULT '',
-            "location" TEXT NOT NULL DEFAULT '',
-            "status" TEXT NOT NULL DEFAULT 'APPLIED',
-            "appliedDate" TEXT NOT NULL DEFAULT '',
-            "salaryRange" TEXT NOT NULL DEFAULT '',
-            "notes" TEXT NOT NULL DEFAULT '',
-            "tailoredResumeId" TEXT,
-            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            CONSTRAINT "JobApplication_tailoredResumeId_fkey" FOREIGN KEY ("tailoredResumeId") REFERENCES "TailoredResume" ("id") ON DELETE SET NULL ON UPDATE CASCADE
-          );
-        `);
-        await prisma.$executeRawUnsafe(`
-          CREATE TABLE IF NOT EXISTS "AppSetting" (
-            "key" TEXT NOT NULL PRIMARY KEY,
-            "value" TEXT NOT NULL,
-            "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-          );
-        `);
-
         await prisma.masterProfile.upsert({
           where: { id: "default" },
           update: {},
